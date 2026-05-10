@@ -154,7 +154,8 @@ async function runTests() {
     console.log('6️⃣  Complete Checkout (Process Payment)');
     const completePayload = {
       payment_data: {
-        token: 'spt_test_' + Math.random().toString(36).substring(7),
+        // token: 'spt_test_' + Math.random().toString(36).substring(7),
+        token: "tok_visa",
         provider: 'stripe',
         billing_address: {
           name: 'Alice Agent',
