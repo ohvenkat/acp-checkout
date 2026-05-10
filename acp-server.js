@@ -439,7 +439,7 @@ app.post('/checkouts/:id/complete', async (req, res) => {
 });
 
 // POST /checkouts/:id/cancel - Cancel a checkout
-app.post('/checkouts/:id/cancel', (req, res) => {
+app.post('/checkouts/:id/cancel', async(req, res) => {
   try {
     const { id } = req.params;
     const { data: session, error: fetchError } = await supabase
