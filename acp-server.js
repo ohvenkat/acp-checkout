@@ -366,9 +366,11 @@ app.post('/checkouts/:id/complete', async(req, res) => {
      // Create a payment intent with the token
      // For test tokens like 'tok_visa', we need to create a PaymentMethod first
    // In production, agents will send Shared Payment Tokens (SPT)
+// ----------------------------------------------
+// Handle both test tokens and real Shared Payment Tokens (SPT)
    let paymentMethodId = payment_data.token;
 
-   // If token is a legacy test token (starts with 'tok_'), convert it
+   // If it's a legacy test token (tok_*), convert it
    if (payment_data.token.startsWith('tok_')) {
      try {
        const pm = await stripe.paymentMethods.create({
@@ -379,10 +381,12 @@ app.post('/checkouts/:id/complete', async(req, res) => {
        });
        paymentMethodId = pm.id;
      } catch (pmError) {
-       // If PaymentMethod creation fails, try using token directly
-       console.log('PaymentMethod creation failed, trying direct token:', pmError.message);
+       console.log('PaymentMethod creation failed:', pmError.message);
+       throw new Error(`Unable to process payment: ${pmError.message}`);
      }
    }
+   // If it's an SPT (spt_*) or PaymentMethod ID, use it directly
+   // SPT tokens are already payment methods in Stripe
 
    const paymentIntent = await stripe.paymentIntents.create({
      amount: totalAmount,
