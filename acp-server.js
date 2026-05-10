@@ -1,33 +1,18 @@
 const express = require('express');
-   const { v4: uuidv4 } = require('uuid');
-   const Stripe = require('stripe');
-   const ws = require('ws');
-   require('dotenv').config();
+const { v4: uuidv4 } = require('uuid');
+const Stripe = require('stripe');
+require('dotenv').config();
 
-   const { createClient } = require('@supabase/supabase-js');
 const app = express();
 app.use(express.json());
 
 // Initialize Stripe (requires STRIPE_SECRET_KEY env var)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
-   // Initialize Supabase
-   /*
-  const supabase = createClient(
-     process.env.SUPABASE_URL,
-     process.env.SUPABASE_KEY,
-     {
-       realtime: {
-         params: {
-           eventsPerSecond: 10,
-         },
-       },
-     }
-   );
-  */
+// In-memory storage for checkout sessions
+// In production, use PostgreSQL, MongoDB, or similar
+const checkoutSessions = new Map();
 
-   const supabase = null; // Temporarily disabled
-   
 // Sample product catalog (replace with your actual products)
 const productCatalog = {
   item_123: {
@@ -166,7 +151,7 @@ function validateItems(items) {
 }
 
 // POST /checkouts - Create a new agentic checkout session
-app.post('/checkouts', async(req, res) => {
+app.post('/checkouts', (req, res) => {
   try {
     const { items, buyer, fulfillment_address } = req.body;
 
@@ -233,21 +218,9 @@ app.post('/checkouts', async(req, res) => {
       session.status = 'ready_for_payment';
     }
 
-    // Save to Supabase
-   const { error } = await supabase
-     .from('checkouts')
-     .insert([session]);
+    checkoutSessions.set(checkoutId, session);
 
-   if (error) {
-     console.error('Supabase insert error:', error);
-     return res.status(500).json({
-       type: 'processing_error',
-       code: 'database_error',
-       message: error.message,
-     });
-   }
-
-   res.status(201).json(session);
+    res.status(201).json(session);
   } catch (error) {
     console.error('POST /checkouts error:', error);
     res.status(500).json({
@@ -259,54 +232,45 @@ app.post('/checkouts', async(req, res) => {
 });
 
 // GET /checkouts/:id - Retrieve a checkout session
-app.get('/checkouts/:id', async (req, res) => {
-     try {
-       const { id } = req.params;
+app.get('/checkouts/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const session = checkoutSessions.get(id);
 
-       const { data: session, error } = await supabase
-         .from('checkouts')
-         .select('*')
-         .eq('id', id)
-         .single();
+    if (!session) {
+      return res.status(404).json({
+        type: 'invalid_request',
+        code: 'not_found',
+        message: `Checkout session ${id} not found`,
+      });
+    }
 
-       if (error || !session) {
-         return res.status(404).json({
-           type: 'invalid_request',
-           code: 'not_found',
-           message: `Checkout session ${id} not found`,
-         });
-       }
+    res.json(session);
+  } catch (error) {
+    console.error('GET /checkouts/:id error:', error);
+    res.status(500).json({
+      type: 'processing_error',
+      code: 'internal_error',
+      message: error.message,
+    });
+  }
+});
 
-       res.json(session);
-     } catch (error) {
-       console.error('GET /checkouts/:id error:', error);
-       res.status(500).json({
-         type: 'processing_error',
-         code: 'internal_error',
-         message: error.message,
-       });
-     }
-   });
-// ================
 // PUT /checkouts/:id - Update a checkout session
-app.put('/checkouts/:id', async(req, res) => {
+app.put('/checkouts/:id', (req, res) => {
   try {
     const { id } = req.params;
     const { items, buyer, fulfillment_address, fulfillment_option_id } = req.body;
 
-    const { data: session, error: fetchError } = await supabase
-     .from('checkouts')
-     .select('*')
-     .eq('id', id)
-     .single();
+    const session = checkoutSessions.get(id);
+    if (!session) {
+      return res.status(404).json({
+        type: 'invalid_request',
+        code: 'not_found',
+        message: `Checkout session ${id} not found`,
+      });
+    }
 
-   if (fetchError || !session) {
-     return res.status(404).json({
-       type: 'invalid_request',
-       code: 'not_found',
-       message: `Checkout session ${id} not found`,
-     });
-   }
     // Update items if provided
     if (items) {
       const itemErrors = validateItems(items);
@@ -351,22 +315,8 @@ app.put('/checkouts/:id', async(req, res) => {
     );
     session.totals = calculateTotals(session.line_items, selectedOption);
 
-    // Update in Supabase
-   const { error } = await supabase
-     .from('checkouts')
-     .update(session)
-     .eq('id', id);
-
-   if (error) {
-     console.error('Supabase update error:', error);
-     return res.status(500).json({
-       type: 'processing_error',
-       code: 'database_error',
-       message: error.message,
-     });
-   }
-
-   res.json(session);
+    checkoutSessions.set(id, session);
+    res.json(session);
   } catch (error) {
     console.error('PUT /checkouts/:id error:', error);
     res.status(500).json({
@@ -378,24 +328,19 @@ app.put('/checkouts/:id', async(req, res) => {
 });
 
 // POST /checkouts/:id/complete - Complete a checkout
-app.post('/checkouts/:id/complete', async (req, res) => {
+app.post('/checkouts/:id/complete', (req, res) => {
   try {
     const { id } = req.params;
     const { payment_data } = req.body;
 
-    const { data: session, error: fetchError } = await supabase
-     .from('checkouts')
-     .select('*')
-     .eq('id', id)
-     .single();
-
-   if (fetchError || !session) {
-     return res.status(404).json({
-       type: 'invalid_request',
-       code: 'not_found',
-       message: `Checkout session ${id} not found`,
-     });
-   }
+    const session = checkoutSessions.get(id);
+    if (!session) {
+      return res.status(404).json({
+        type: 'invalid_request',
+        code: 'not_found',
+        message: `Checkout session ${id} not found`,
+      });
+    }
 
     // Validate payment data
     if (!payment_data || !payment_data.token || !payment_data.provider) {
@@ -411,35 +356,16 @@ app.post('/checkouts/:id/complete', async (req, res) => {
     console.log(`Processing payment for checkout ${id} with token: ${payment_data.token}`);
 
     // Update session status
-    ssession.status = 'completed';
-   session.messages.push({
-     type: 'info',
-     content_type: 'plain',
-     content: 'Payment processed successfully',
-   });
+    session.status = 'completed';
+    session.messages.push({
+      type: 'info',
+      content_type: 'plain',
+      content: 'Payment processed successfully',
+    });
 
-   // Update in Supabase
-   const { error: updateError } = await supabase
-     .from('checkouts')
-     .update({
-       status: session.status,
-       messages: session.messages,
-       completed_at: new Date().toISOString(),
-     })
-     .eq('id', id);
+    checkoutSessions.set(id, session);
 
-   if (updateError) {
-     console.error('Supabase update error:', updateError);
-     return res.status(500).json({
-       type: 'processing_error',
-       code: 'database_error',
-       message: updateError.message,
-     });
-   }
-
-   res.json(session);
-
- 
+    res.json(session);
   } catch (error) {
     console.error('POST /checkouts/:id/complete error:', error);
     res.status(500).json({
@@ -451,49 +377,28 @@ app.post('/checkouts/:id/complete', async (req, res) => {
 });
 
 // POST /checkouts/:id/cancel - Cancel a checkout
-app.post('/checkouts/:id/cancel', async(req, res) => {
+app.post('/checkouts/:id/cancel', (req, res) => {
   try {
     const { id } = req.params;
-    const { data: session, error: fetchError } = await supabase
-     .from('checkouts')
-     .select('*')
-     .eq('id', id)
-     .single();
+    const session = checkoutSessions.get(id);
 
-   if (fetchError || !session) {
-     return res.status(404).json({
-       type: 'invalid_request',
-       code: 'not_found',
-       message: `Checkout session ${id} not found`,
-     });
-   }
+    if (!session) {
+      return res.status(404).json({
+        type: 'invalid_request',
+        code: 'not_found',
+        message: `Checkout session ${id} not found`,
+      });
+    }
 
-   session.status = 'canceled';
-   session.messages.push({
-     type: 'info',
-     content_type: 'plain',
-     content: 'Checkout cancelled',
-   });
+    session.status = 'canceled';
+    session.messages.push({
+      type: 'info',
+      content_type: 'plain',
+      content: 'Checkout cancelled',
+    });
 
-   // Update in Supabase
-   const { error: updateError } = await supabase
-     .from('checkouts')
-     .update({
-       status: session.status,
-       messages: session.messages,
-     })
-     .eq('id', id);
-
-   if (updateError) {
-     console.error('Supabase update error:', updateError);
-     return res.status(500).json({
-       type: 'processing_error',
-       code: 'database_error',
-       message: updateError.message,
-     });
-   }
-
-   res.json(session);
+    checkoutSessions.set(id, session);
+    res.json(session);
   } catch (error) {
     console.error('POST /checkouts/:id/cancel error:', error);
     res.status(500).json({
