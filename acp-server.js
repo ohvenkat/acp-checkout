@@ -11,8 +11,8 @@ app.use(express.json());
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
    // Initialize Supabase
- const ws = require('ws');
-  const supabase = createClient(
+// Initialize Supabase without Realtime (REST API only)
+   const supabase = createClient(
      process.env.SUPABASE_URL,
      process.env.SUPABASE_KEY,
      {
@@ -20,6 +20,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
          params: {
            eventsPerSecond: 10,
          },
+       },
+       global: {
+         fetch: fetch,
        },
      }
    );
