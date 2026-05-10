@@ -11,7 +11,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
 // In-memory storage for checkout sessions
 // In production, use PostgreSQL, MongoDB, or similar
-const checkoutSessions = new Map();
+// In-memory storage for checkout sessions
+   // In production, use PostgreSQL, MongoDB, or similar
+   const checkoutSessions = new Map();
+   const orders = new Map();
 
 // Sample product catalog (replace with your actual products)
 const productCatalog = {
@@ -353,19 +356,96 @@ app.post('/checkouts/:id/complete', (req, res) => {
 
     // In production, process payment with Stripe using the payment token
     // For demo purposes, we'll simulate payment processing
-    console.log(`Processing payment for checkout ${id} with token: ${payment_data.token}`);
+    // Process payment with Stripe
+   try {
+     console.log(`Processing payment for checkout ${id} with token: ${payment_data.token}`);
 
-    // Update session status
-    session.status = 'completed';
-    session.messages.push({
-      type: 'info',
-      content_type: 'plain',
-      content: 'Payment processed successfully',
-    });
+     // Calculate total amount from session totals
+     const totalAmount = session.totals.find(t => t.type === 'total').amount;
 
-    checkoutSessions.set(id, session);
+     // Create a payment intent with the token
+     const paymentIntent = await stripe.paymentIntents.create({
+       amount: totalAmount,
+       currency: 'usd',
+       payment_method: payment_data.token,
+       confirm: true,
+       description: `Checkout ${id}`,
+     });
 
-    res.json(session);
+     // Check if payment was successful
+     if (paymentIntent.status === 'succeeded') {
+       // Update checkout status
+       session.status = 'completed';
+       session.messages.push({
+         type: 'info',
+         content_type: 'plain',
+         content: 'Payment processed successfully',
+       });
+
+       // Create order record
+       const orderId = `order_${uuidv4().substring(0, 8)}`;
+       const order = {
+         id: orderId,
+         checkout_session_id: id,
+         status: 'created',
+         payment_intent_id: paymentIntent.id,
+         amount: totalAmount,
+         buyer: session.buyer,
+         line_items: session.line_items,
+         fulfillment_address: session.fulfillment_address,
+         created_at: new Date().toISOString(),
+       };
+
+       orders.set(orderId, order);
+       console.log(`Order created: ${orderId}`);
+
+       checkoutSessions.set(id, session);
+       res.json(session);
+     } else if (paymentIntent.status === 'requires_action') {
+       // Payment requires additional action (3D Secure, etc.)
+       session.status = 'in_progress';
+       session.messages.push({
+         type: 'error',
+         code: 'requires_3ds',
+         content_type: 'plain',
+         content: 'Payment requires additional authentication',
+       });
+
+       checkoutSessions.set(id, session);
+       res.status(400).json(session);
+     } else {
+       // Payment failed
+       session.status = 'in_progress';
+       session.messages.push({
+         type: 'error',
+         code: 'payment_declined',
+         content_type: 'plain',
+         content: `Payment failed: ${paymentIntent.last_payment_error?.message || 'Unknown error'}`,
+       });
+
+       checkoutSessions.set(id, session);
+       res.status(400).json(session);
+     }
+   } catch (stripeError) {
+     console.error('Stripe payment error:', stripeError);
+     
+     session.status = 'in_progress';
+     session.messages.push({
+       type: 'error',
+       code: 'payment_processing_failed',
+       content_type: 'plain',
+       content: stripeError.message,
+     });
+
+     checkoutSessions.set(id, session);
+
+     res.status(400).json({
+       type: 'processing_error',
+       code: 'payment_processing_failed',
+       message: stripeError.message,
+     });
+   }
+  // ---------------------------------------------
   } catch (error) {
     console.error('POST /checkouts/:id/complete error:', error);
     res.status(500).json({
@@ -408,7 +488,31 @@ app.post('/checkouts/:id/cancel', (req, res) => {
     });
   }
 });
+// GET /orders/:id - Retrieve an order
+   app.get('/orders/:id', (req, res) => {
+     try {
+       const { id } = req.params;
+       const order = orders.get(id);
 
+       if (!order) {
+         return res.status(404).json({
+           type: 'invalid_request',
+           code: 'not_found',
+           message: `Order ${id} not found`,
+         });
+       }
+
+       res.json(order);
+     } catch (error) {
+       console.error('GET /orders/:id error:', error);
+       res.status(500).json({
+         type: 'processing_error',
+         code: 'internal_error',
+         message: error.message,
+       });
+     }
+   });
+   
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
