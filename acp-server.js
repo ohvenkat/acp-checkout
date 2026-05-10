@@ -390,8 +390,11 @@ app.post('/checkouts/:id/complete', async(req, res) => {
      payment_method: paymentMethodId,
      confirm: true,
      description: `Checkout ${id}`,
+     automatic_payment_methods: {
+       enabled: true,
+       allow_redirects: 'never',
+     },
    });
-   
      // Check if payment was successful
      if (paymentIntent.status === 'succeeded') {
        // Update checkout status
