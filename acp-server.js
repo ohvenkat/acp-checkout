@@ -1,9 +1,10 @@
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
-const Stripe = require('stripe');
-require('dotenv').config();
-const { createClient } = require('@supabase/supabase-js');
+   const { v4: uuidv4 } = require('uuid');
+   const Stripe = require('stripe');
+   const ws = require('ws');
+   require('dotenv').config();
 
+   const { createClient } = require('@supabase/supabase-js');
 const app = express();
 app.use(express.json());
 
@@ -11,12 +12,18 @@ app.use(express.json());
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
    // Initialize Supabase
-// Initialize Supabase without Realtime (REST API only)
   const supabase = createClient(
      process.env.SUPABASE_URL,
-     process.env.SUPABASE_KEY
+     process.env.SUPABASE_KEY,
+     {
+       realtime: {
+         params: {
+           eventsPerSecond: 10,
+         },
+       },
+     }
    );
-   
+
 // Sample product catalog (replace with your actual products)
 const productCatalog = {
   item_123: {
