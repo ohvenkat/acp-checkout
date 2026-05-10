@@ -364,14 +364,34 @@ app.post('/checkouts/:id/complete', async(req, res) => {
      const totalAmount = session.totals.find(t => t.type === 'total').amount;
 
      // Create a payment intent with the token
-     const paymentIntent = await stripe.paymentIntents.create({
-       amount: totalAmount,
-       currency: 'usd',
-       payment_method: payment_data.token,
-       confirm: true,
-       description: `Checkout ${id}`,
-     });
+     // For test tokens like 'tok_visa', we need to create a PaymentMethod first
+   // In production, agents will send Shared Payment Tokens (SPT)
+   let paymentMethodId = payment_data.token;
 
+   // If token is a legacy test token (starts with 'tok_'), convert it
+   if (payment_data.token.startsWith('tok_')) {
+     try {
+       const pm = await stripe.paymentMethods.create({
+         type: 'card',
+         card: {
+           token: payment_data.token,
+         },
+       });
+       paymentMethodId = pm.id;
+     } catch (pmError) {
+       // If PaymentMethod creation fails, try using token directly
+       console.log('PaymentMethod creation failed, trying direct token:', pmError.message);
+     }
+   }
+
+   const paymentIntent = await stripe.paymentIntents.create({
+     amount: totalAmount,
+     currency: 'usd',
+     payment_method: paymentMethodId,
+     confirm: true,
+     description: `Checkout ${id}`,
+   });
+   
      // Check if payment was successful
      if (paymentIntent.status === 'succeeded') {
        // Update checkout status
