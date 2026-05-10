@@ -331,7 +331,7 @@ app.put('/checkouts/:id', (req, res) => {
 });
 
 // POST /checkouts/:id/complete - Complete a checkout
-app.post('/checkouts/:id/complete', (req, res) => {
+app.post('/checkouts/:id/complete', async(req, res) => {
   try {
     const { id } = req.params;
     const { payment_data } = req.body;
@@ -512,7 +512,7 @@ app.post('/checkouts/:id/cancel', (req, res) => {
        });
      }
    });
-   
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
