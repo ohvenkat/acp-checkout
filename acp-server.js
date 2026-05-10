@@ -12,6 +12,7 @@ app.use(express.json());
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
    // Initialize Supabase
+   /*
   const supabase = createClient(
      process.env.SUPABASE_URL,
      process.env.SUPABASE_KEY,
@@ -23,7 +24,10 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
        },
      }
    );
+  */
 
+   const supabase = null; // Temporarily disabled
+   
 // Sample product catalog (replace with your actual products)
 const productCatalog = {
   item_123: {
