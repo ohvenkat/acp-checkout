@@ -12,20 +12,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
    // Initialize Supabase
 // Initialize Supabase without Realtime (REST API only)
-   const supabase = createClient(
+  const supabase = createClient(
      process.env.SUPABASE_URL,
-     process.env.SUPABASE_KEY,
-     {
-       realtime: {
-         params: {
-           eventsPerSecond: 10,
-         },
-       },
-       global: {
-         fetch: fetch,
-       },
-     }
+     process.env.SUPABASE_KEY
    );
+   
 // Sample product catalog (replace with your actual products)
 const productCatalog = {
   item_123: {
