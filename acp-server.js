@@ -12,15 +12,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
    // Initialize Supabase
  const ws = require('ws');
-   const supabase = createClient(
+  const supabase = createClient(
      process.env.SUPABASE_URL,
      process.env.SUPABASE_KEY,
      {
-       realtime: {
-         params: {
-           eventsPerSecond: 10,
-         },
+       auth: {
+         persistSession: false,
        },
+       realtime: false, // Disable Realtime since we don't need it
      }
    );
 
