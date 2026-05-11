@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public'));
 
 // Initialize Stripe (requires STRIPE_SECRET_KEY env var)
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
@@ -540,6 +541,10 @@ app.post('/checkouts/:id/cancel', (req, res) => {
      }
    });
 
+   // Serve demo page
+   app.get('/demo', (req, res) => {
+     res.sendFile(__dirname + '/public/demo.html');
+   });
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
