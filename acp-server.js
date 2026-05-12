@@ -545,6 +545,47 @@ app.post('/checkouts/:id/cancel', (req, res) => {
    app.get('/demo', (req, res) => {
      res.sendFile(__dirname + '/public/demo.html');
    });
+
+// update prices
+// Admin: Update product price
+   app.post('/admin/products/:id/price', (req, res) => {
+     try {
+       const { id } = req.params;
+       const { new_price } = req.query;
+
+       if (!new_price) {
+         return res.status(400).json({
+           error: 'new_price query parameter required (in cents)',
+         });
+       }
+
+       const product = productCatalog[id];
+       if (!product) {
+         return res.status(404).json({
+           error: `Product ${id} not found`,
+         });
+       }
+
+       const oldPrice = product.price;
+       product.price = parseInt(new_price);
+
+       console.log(`Price updated: ${product.name} - $${(oldPrice/100).toFixed(2)} → $${(product.price/100).toFixed(2)}`);
+
+       res.json({
+         id,
+         name: product.name,
+         old_price: oldPrice,
+         new_price: product.price,
+         message: `Price updated: ${product.name} - $${(oldPrice/100).toFixed(2)} → $${(product.price/100).toFixed(2)}`,
+       });
+     } catch (error) {
+       console.error('Admin price update error:', error);
+       res.status(500).json({
+         error: error.message,
+       });
+     }
+   });
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
