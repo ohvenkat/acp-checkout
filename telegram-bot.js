@@ -17,10 +17,10 @@ const API_BASE = 'https://acp.venkatr.cloud';
 const DEMO_ADDRESS = {
   name: 'Demo User',
   line_one: '100 Main Street',
-  city: 'Cincinnati',
-  state: 'OH',
+  city: 'AnyTown',
+  state: 'NY',
   country: 'US',
-  postal_code: '40000',
+  postal_code: '10006',
 };
 
 // Product catalog (same as server)
